@@ -2,9 +2,9 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
+	"github.com/codevshl/http-metadata-inventory-service/internal/core/apperror"
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/domain"
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/ports"
 	"github.com/codevshl/http-metadata-inventory-service/internal/platform/logger"
@@ -135,11 +135,11 @@ func (s *metadataService) CreateMetadata(ctx context.Context, url string) error 
 
 	metadata, err := s.scraper.Fetch(ctx, url)
 	if err != nil {
-		return fmt.Errorf("failed to fetch metadata: %w", err)
+		return apperror.Wrap(apperror.ErrUpstream, "failed to fetch metadata", err)
 	}
 
 	if err := s.repo.Save(ctx, *metadata); err != nil {
-		return fmt.Errorf("failed to save metadata: %w", err)
+		return apperror.Wrap(apperror.ErrInternal, "internal server error", err)
 	}
 
 	logger.Info("Metadata created successfully", zap.String("url", url))
@@ -160,7 +160,7 @@ func (s *metadataService) GetMetadata(ctx context.Context, url string) (*domain.
 		return metadata, nil
 	}
 
-	if err == domain.ErrNotFound {
+	if apperror.Is(err, apperror.ErrNotFound) {
 		logger.Info("Metadata not found, queueing background scrape", zap.String("url", url))
 
 		select {
@@ -175,7 +175,7 @@ func (s *metadataService) GetMetadata(ctx context.Context, url string) (*domain.
 		return nil, nil
 	}
 
-	return nil, fmt.Errorf("failed to get metadata: %w", err)
+	return nil, apperror.Wrap(apperror.ErrInternal, "internal server error", err)
 }
 
 // Shutdown gracefully stops the worker pool

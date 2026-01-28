@@ -3,8 +3,9 @@ package http
 import (
 	"net/http"
 
-	"github.com/codevshl/http-metadata-inventory-service/internal/core/domain"
+	"github.com/codevshl/http-metadata-inventory-service/internal/core/apperror"
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/ports"
+	"github.com/codevshl/http-metadata-inventory-service/internal/adapters/primary/http/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -22,48 +23,38 @@ func NewHandler(svc ports.MetadataService) *Handler {
 func (h *Handler) CreateMetadataHandler(c *gin.Context) {
 	var req CreateMetadataRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		response.WriteError(c, apperror.Wrap(apperror.ErrValidation, "invalid request body", err))
 		return
 	}
 
 	if err := h.svc.CreateMetadata(c.Request.Context(), req.URL); err != nil {
-		switch err {
-		case domain.ErrInvalidURL:
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
-		default:
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
-		}
+		response.WriteError(c, err)
 		return
 	}
 
-	c.Status(http.StatusCreated)
+	response.WriteSuccess(c, http.StatusCreated, "METADATA_CREATED", "metadata created", nil)
 }
 
 // GetMetadataHandler handles GET /metadata
 func (h *Handler) GetMetadataHandler(c *gin.Context) {
 	url := c.Query("url")
 	if url == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "url query parameter is required"})
+		response.WriteError(c, apperror.New(apperror.ErrValidation, "url query parameter is required"))
 		return
 	}
 
 	metadata, err := h.svc.GetMetadata(c.Request.Context(), url)
 	if err != nil {
-		switch err {
-		case domain.ErrNotFound:
-			c.JSON(http.StatusNotFound, ErrorResponse{Error: err.Error()})
-		default:
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
-		}
+		response.WriteError(c, err)
 		return
 	}
 
 	if metadata == nil {
-		c.Status(http.StatusAccepted)
+		response.WriteSuccess(c, http.StatusAccepted, "METADATA_PENDING", "metadata collection started", nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, MetadataResponse{
+	response.WriteSuccess(c, http.StatusOK, "METADATA_FOUND", "metadata retrieved", MetadataResponse{
 		URL:        metadata.URL,
 		Headers:    metadata.Headers,
 		Cookies:    metadata.Cookies,

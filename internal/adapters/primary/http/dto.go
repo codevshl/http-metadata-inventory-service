@@ -12,8 +12,3 @@ type MetadataResponse struct {
 	Cookies    map[string]string `json:"cookies"`
 	PageSource string            `json:"page_source"`
 }
-
-// ErrorResponse Standard error response format
-type ErrorResponse struct {
-	Error string `json:"error"`
-}

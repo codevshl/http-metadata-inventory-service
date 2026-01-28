@@ -1,9 +1,9 @@
 package domain
 
-import "errors"
+import "github.com/codevshl/http-metadata-inventory-service/internal/core/apperror"
 
 var (
-	ErrNotFound      = errors.New("metadata not found")
-	ErrInvalidURL    = errors.New("invalid url")
-	ErrInternalError = errors.New("internal server error")
+	ErrNotFound      = apperror.New(apperror.ErrNotFound, "metadata not found")
+	ErrInvalidURL    = apperror.New(apperror.ErrValidation, "invalid url")
+	ErrInternalError = apperror.New(apperror.ErrInternal, "internal server error")
 )

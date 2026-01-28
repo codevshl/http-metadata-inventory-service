@@ -2,9 +2,9 @@ package mongodb
 
 import (
 	"context"
-	"fmt"
 	"time"
 
+	"github.com/codevshl/http-metadata-inventory-service/internal/core/apperror"
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/domain"
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/ports"
 	"github.com/codevshl/http-metadata-inventory-service/internal/platform/logger"
@@ -49,7 +49,7 @@ func (r *mongoRepository) ensureIndexes(ctx context.Context) error {
 
 	_, err := r.collection.Indexes().CreateOne(ctx, indexModel)
 	if err != nil {
-		return fmt.Errorf("failed to create index: %w", err)
+		return apperror.Wrap(apperror.ErrInternal, "internal server error", err)
 	}
 
 	logger.Info("MongoDB indexes created successfully")
@@ -65,7 +65,7 @@ func (r *mongoRepository) Save(ctx context.Context, metadata domain.Metadata) er
 
 	_, err := r.collection.ReplaceOne(ctx, filter, mongoModel, opts)
 	if err != nil {
-		return fmt.Errorf("failed to save metadata: %w", err)
+		return apperror.Wrap(apperror.ErrInternal, "internal server error", err)
 	}
 
 	return nil
@@ -81,7 +81,7 @@ func (r *mongoRepository) Get(ctx context.Context, url string) (*domain.Metadata
 		if err == mongo.ErrNoDocuments {
 			return nil, domain.ErrNotFound
 		}
-		return nil, fmt.Errorf("failed to get metadata: %w", err)
+		return nil, apperror.Wrap(apperror.ErrInternal, "internal server error", err)
 	}
 
 	domainModel := toDomain(mongoModel)

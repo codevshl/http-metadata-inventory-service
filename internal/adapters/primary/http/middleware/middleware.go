@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/codevshl/http-metadata-inventory-service/internal/adapters/primary/http/response"
 	"github.com/codevshl/http-metadata-inventory-service/internal/platform/logger"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -25,14 +26,11 @@ func ErrorHandlerMiddleware() gin.HandlerFunc {
 		// If there are errors in the context, handle the last one
 		if len(c.Errors) > 0 {
 			err := c.Errors.Last()
-			logger.Error("Request Error", zap.Error(err))
+			logger.Error("Request Error", zap.Error(err.Err))
 
 			// If not already written, write error response
-			// This is basic; in a real app you'd map error types to status codes
 			if !c.Writer.Written() {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": err.Error(),
-				})
+				response.WriteError(c, err.Err)
 			}
 		}
 	}

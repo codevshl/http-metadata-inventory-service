@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/codevshl/http-metadata-inventory-service/internal/core/apperror"
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/domain"
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/ports"
 )
@@ -33,19 +34,19 @@ func NewScraper() ports.Scraper {
 func (s *scraper) Fetch(ctx context.Context, url string) (*domain.Metadata, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, apperror.Wrap(apperror.ErrValidation, "invalid url", err)
 	}
 
 	req.Header.Set("User-Agent", "MetadataInventoryBot/1.0")
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch URL: %w", err)
+		return nil, apperror.Wrap(apperror.ErrUpstream, "failed to fetch metadata", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, apperror.Wrap(apperror.ErrUpstream, "upstream returned error", fmt.Errorf("unexpected status code: %d", resp.StatusCode))
 	}
 
 	headers := make(map[string]string)
@@ -62,7 +63,7 @@ func (s *scraper) Fetch(ctx context.Context, url string) (*domain.Metadata, erro
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, apperror.Wrap(apperror.ErrUpstream, "failed to read upstream response", err)
 	}
 
 	return &domain.Metadata{

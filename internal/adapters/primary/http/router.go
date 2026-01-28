@@ -2,6 +2,7 @@ package http
 
 import (
 	"github.com/codevshl/http-metadata-inventory-service/internal/adapters/primary/http/middleware"
+	"github.com/codevshl/http-metadata-inventory-service/internal/adapters/primary/http/response"
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/ports"
 	"github.com/gin-gonic/gin"
 )
@@ -15,6 +16,7 @@ func SetupRouter(svc ports.MetadataService, isProd bool) *gin.Engine {
 	r := gin.New()
 
 	// Apply Middlewares
+	r.Use(middleware.TraceMiddleware())
 	r.Use(middleware.RequestLogger())
 	r.Use(middleware.RecoveryMiddleware())
 	r.Use(middleware.JSONMiddleware())
@@ -32,7 +34,7 @@ func SetupRouter(svc ports.MetadataService, isProd bool) *gin.Engine {
 
 	// Health check
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
+		response.WriteSuccess(c, 200, "HEALTH_OK", "ok", nil)
 	})
 
 	return r
