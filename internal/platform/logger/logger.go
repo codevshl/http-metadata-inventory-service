@@ -70,6 +70,10 @@ func Debug(msg string, fields ...zap.Field) {
 	Get().Debug(msg, fields...)
 }
 
+func Warn(msg string, fields ...zap.Field) {
+	Get().Warn(msg, fields...)
+}
+
 func Fatal(msg string, fields ...zap.Field) {
 	Get().Fatal(msg, fields...)
 }

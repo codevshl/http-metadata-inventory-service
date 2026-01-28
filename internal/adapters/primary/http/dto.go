@@ -2,7 +2,6 @@ package http
 
 // CreateMetadataRequest is the DTO for the POST /metadata endpoint
 type CreateMetadataRequest struct {
-	// Added binding validation
 	URL string `json:"url" binding:"required,url"`
 }
 
