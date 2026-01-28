@@ -12,6 +12,7 @@ import (
 	"github.com/codevshl/http-metadata-inventory-service/internal/adapters/secondary/repository/mongodb"
 	"github.com/codevshl/http-metadata-inventory-service/internal/adapters/secondary/scraper/http_client"
 	"github.com/codevshl/http-metadata-inventory-service/internal/config"
+	"github.com/codevshl/http-metadata-inventory-service/internal/core/ports"
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/services"
 	"github.com/codevshl/http-metadata-inventory-service/internal/platform/db"
 	"github.com/codevshl/http-metadata-inventory-service/internal/platform/logger"
@@ -19,60 +20,99 @@ import (
 )
 
 func main() {
-	// 1. Load Configuration
+	cfg := loadConfig()
+
+	initLogger(cfg)
+	defer logger.Sync()
+
+	initDatabase(cfg)
+	defer db.Disconnect()
+
+	svc := buildService(cfg)
+	server := buildServer(cfg, svc)
+
+	startServer(server)
+	waitForShutdown(server, svc)
+
+	logger.Info("Server exited gracefully")
+}
+
+func loadConfig() *config.Config {
 	cfg, err := config.Load()
 	if err != nil {
 		panic("invalid configuration: " + err.Error())
 	}
+	return cfg
+}
 
-	// 2. Initialize Logger (Singleton)
+func initLogger(cfg *config.Config) {
 	logger.Init(cfg.LogLevel, cfg.IsProduction)
-	defer logger.Sync()
 
-	logger.Info("Starting HTTP Metadata Inventory Service", zap.String("port", cfg.ServerPort))
+	logger.Info(
+		"Starting HTTP Metadata Inventory Service",
+		zap.String("port", cfg.ServerPort),
+		zap.Int("workers", cfg.WorkerPoolSize),
+	)
+}
 
-	// 3. Initialize Database (Singleton)
+func initDatabase(cfg *config.Config) {
 	if err := db.Connect(cfg.MongoURI); err != nil {
 		logger.Fatal("Failed to connect to database", zap.Error(err))
 	}
-	defer db.Disconnect()
+}
 
-	repo := mongodb.NewMongoRepository(db.GetClient(), cfg.DatabaseName)
+func buildService(cfg *config.Config) ports.MetadataService {
+	repo := mongodb.NewMongoRepository(
+		db.GetClient(),
+		cfg.DatabaseName,
+	)
 
 	scraper := http_client.NewScraper()
 
-	// 5. Initialize Services (Core)
-	svc := services.NewMetadataService(repo, scraper)
-
-	// 6. Initialize Router (Driving/Primary)
-	router := adapter_http.SetupRouter(svc, cfg.IsProduction)
-
-	// 7. Start Server (Graceful Shutdown)
-	srv := &http.Server{
-		Addr:    ":" + cfg.ServerPort,
-		Handler: router,
+	svcConfig := services.Config{
+		WorkerPoolSize: cfg.WorkerPoolSize,
+		TaskQueueSize:  cfg.TaskQueueSize,
 	}
 
-	// Run server in a goroutine so it doesn't block shutdown handling
+	return services.NewMetadataService(repo, scraper, svcConfig)
+}
+
+func buildServer(cfg *config.Config, svc ports.MetadataService) *http.Server {
+	router := adapter_http.SetupRouter(svc, cfg.IsProduction)
+
+	return &http.Server{
+		Addr:         ":" + cfg.ServerPort,
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+}
+
+func startServer(srv *http.Server) {
 	go func() {
+		logger.Info("Server listening", zap.String("addr", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("Listen: %s\n", zap.Error(err))
+			logger.Fatal("Server failed to start", zap.Error(err))
 		}
 	}()
+}
 
-	// Wait for interrupt signal to gracefully shutdown the server
+func waitForShutdown(srv *http.Server, svc ports.MetadataService) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
 	logger.Info("Shutting down server...")
 
-	// The context is used to inform the server it has 5 seconds to finish
-	// the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	if err := srv.Shutdown(ctx); err != nil {
-		logger.Fatal("Server forced to shutdown", zap.Error(err))
+		logger.Error("Server forced to shutdown", zap.Error(err))
 	}
 
-	logger.Info("Server exiting")
+	if shutdownable, ok := svc.(interface{ Shutdown() }); ok {
+		shutdownable.Shutdown()
+	}
 }
