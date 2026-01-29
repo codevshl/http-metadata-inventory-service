@@ -2,6 +2,7 @@ package v1
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/codevshl/http-metadata-inventory-service/internal/adapters/primary/http/response"
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/apperror"
@@ -45,6 +46,7 @@ func (h *MetadataHandler) CreateMetadataHandler(c *gin.Context) {
 		logger.Msg("HTTP", "MetadataHandler", "Adapter", "create metadata requested"),
 	)
 
+	req.URL = strings.TrimSpace(req.URL)
 	if err := h.svc.CreateMetadata(c.Request.Context(), req.URL); err != nil {
 		logger.WithRequest(c.Request.Context(), zap.Error(err), zap.String("url", req.URL)).Error(
 			logger.Msg("HTTP", "MetadataHandler", "Adapter", "create metadata failed"),
@@ -70,6 +72,7 @@ func (h *MetadataHandler) CreateMetadataHandler(c *gin.Context) {
 // @Router /metadata [get]
 func (h *MetadataHandler) GetMetadataHandler(c *gin.Context) {
 	url := c.Query("url")
+	url = strings.TrimSpace(url)
 	if url == "" {
 		logger.WithRequest(c.Request.Context()).Warn(
 			logger.Msg("HTTP", "MetadataHandler", "Adapter", "missing url query parameter"),
