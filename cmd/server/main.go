@@ -1,3 +1,12 @@
+// @title HTTP Metadata Inventory Service API
+// @version 1.1.0
+// @description Collects and serves HTTP metadata for a given URL.
+// @description
+// @description **How it works**
+// @description - POST /api/v1/metadata performs an immediate scrape and persists the result.
+// @description - GET /api/v1/metadata returns cached metadata if present.
+// @description - If not present, GET returns 202 Accepted and starts a background scrape.
+// @BasePath /api/v1
 package main
 
 import (
@@ -24,6 +33,11 @@ func main() {
 
 	initLogger(cfg)
 	defer logger.Sync()
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Get().Fatal("fatal panic", zap.Any("panic", r), zap.Stack("stack"))
+		}
+	}()
 
 	initDatabase(cfg)
 	defer db.Disconnect()

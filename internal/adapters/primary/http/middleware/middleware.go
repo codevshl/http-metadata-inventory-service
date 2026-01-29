@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/codevshl/http-metadata-inventory-service/internal/adapters/primary/http/response"
@@ -13,6 +14,10 @@ import (
 // JSONMiddleware ensures that all responses are JSON
 func JSONMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/docs") {
+			c.Next()
+			return
+		}
 		c.Writer.Header().Set("Content-Type", "application/json")
 		c.Next()
 	}
@@ -24,9 +29,11 @@ func ErrorHandlerMiddleware() gin.HandlerFunc {
 		c.Next()
 
 		// If there are errors in the context, handle the last one
-		if len(c.Errors) > 0 {
+	if len(c.Errors) > 0 {
 			err := c.Errors.Last()
-			logger.Error("Request Error", zap.Error(err.Err))
+			logger.WithRequest(c.Request.Context(), zap.Error(err.Err)).Error(
+				logger.Msg("HTTP", "Middleware", "Adapter", "request error"),
+			)
 
 			// If not already written, write error response
 			if !c.Writer.Written() {
@@ -45,20 +52,20 @@ func RequestLogger() gin.HandlerFunc {
 
 		c.Next()
 
-		latency := time.Since(start)
-		status := c.Writer.Status()
+	latency := time.Since(start)
+	status := c.Writer.Status()
 
 		if raw != "" {
 			path = path + "?" + raw
 		}
 
-		logger.Info("HTTP Request",
+		logger.WithRequest(c.Request.Context(),
 			zap.String("method", c.Request.Method),
 			zap.String("path", path),
 			zap.Int("status", status),
 			zap.Duration("latency", latency),
 			zap.String("ip", c.ClientIP()),
-		)
+		).Info(logger.Msg("HTTP", "Request", "Adapter", "request completed"))
 	}
 }
 
@@ -66,9 +73,13 @@ func RequestLogger() gin.HandlerFunc {
 func RecoveryMiddleware() gin.HandlerFunc {
 	return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
 		if err, ok := recovered.(error); ok {
-			logger.Error("Panic Recovered", zap.Error(err))
+			logger.WithRequest(c.Request.Context(), zap.Error(err)).Error(
+				logger.Alert(logger.SeverityP0Critical, "HTTP", "Middleware", "Adapter", "panic recovered"),
+			)
 		} else {
-			logger.Error("Panic Recovered", zap.Any("error", recovered))
+			logger.WithRequest(c.Request.Context(), zap.Any("error", recovered)).Error(
+				logger.Alert(logger.SeverityP0Critical, "HTTP", "Middleware", "Adapter", "panic recovered"),
+			)
 		}
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
 	})

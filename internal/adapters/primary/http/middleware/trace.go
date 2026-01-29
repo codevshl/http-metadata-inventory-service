@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"github.com/codevshl/http-metadata-inventory-service/internal/adapters/primary/http/response"
+	"github.com/codevshl/http-metadata-inventory-service/internal/platform/logger"
 	"github.com/gin-gonic/gin"
 )
 
@@ -12,9 +13,13 @@ func TraceMiddleware() gin.HandlerFunc {
 		if traceID == "" {
 			traceID = response.NewTraceID()
 		}
-		if traceID != "" {
-			response.SetTraceID(c, traceID)
-		}
-		c.Next()
+	if traceID != "" {
+		response.SetTraceID(c, traceID)
 	}
+
+	ctx := logger.ContextWithReqID(c.Request.Context(), traceID)
+	c.Request = c.Request.WithContext(ctx)
+
+	c.Next()
+}
 }

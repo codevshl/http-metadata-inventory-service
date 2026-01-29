@@ -1,0 +1,136 @@
+basePath: /api/v1
+definitions:
+  http.CreateMetadataRequest:
+    properties:
+      url:
+        type: string
+    required:
+    - url
+    type: object
+  http.MetadataResponse:
+    properties:
+      cookies:
+        additionalProperties:
+          type: string
+        type: object
+      headers:
+        additionalProperties:
+          type: string
+        type: object
+      page_source:
+        example: <html>...</html>
+        type: string
+      url:
+        example: https://example.com
+        type: string
+    type: object
+  response.APIResponse:
+    properties:
+      code:
+        type: string
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+      trace_id:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: |-
+    Collects and serves HTTP metadata for a given URL.
+
+    **How it works**
+    - POST /api/v1/metadata performs an immediate scrape and persists the result.
+    - GET /api/v1/metadata returns cached metadata if present.
+    - If not present, GET returns 202 Accepted and starts a background scrape.
+  title: HTTP Metadata Inventory Service API
+  version: 1.1.0
+paths:
+  /health:
+    get:
+      description: Returns a simple status response indicating the service is healthy.
+      responses:
+        "200":
+          description: success=true
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Health check
+      tags:
+      - Health
+  /metadata:
+    get:
+      consumes:
+      - application/json
+      description: Returns metadata if available, otherwise starts a background scrape
+        and returns 202.
+      parameters:
+      - description: Target URL
+        example: https://example.com
+        format: uri
+        in: query
+        name: url
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/http.MetadataResponse'
+              type: object
+        "202":
+          description: Metadata not found yet, background scrape triggered
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: 'Validation error" "Example: {\"success\": false, ...}'
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Get metadata (cached or async)
+      tags:
+      - Metadata
+    post:
+      consumes:
+      - application/json
+      description: Scrapes the URL immediately and stores the metadata.
+      parameters:
+      - description: Create metadata request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/http.CreateMetadataRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success=true
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "502":
+          description: Upstream fetch failed
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Create metadata (synchronous scrape)
+      tags:
+      - Metadata
+swagger: "2.0"
