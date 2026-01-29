@@ -31,7 +31,9 @@ func NewMongoRepository(client *mongo.Client, dbName string) ports.MetadataRepos
 	}
 
 	if err := repo.ensureIndexes(context.Background()); err != nil {
-		logger.Error("Failed to create indexes", zap.Error(err))
+		logger.WithRequest(context.Background(), zap.Error(err)).Error(
+			logger.Alert(logger.SeverityP1High, "Metadata", "MongoRepository", "Adapter", "failed to create indexes"),
+		)
 	}
 
 	return repo
@@ -52,7 +54,9 @@ func (r *mongoRepository) ensureIndexes(ctx context.Context) error {
 		return apperror.Wrap(apperror.ErrInternal, "internal server error", err)
 	}
 
-	logger.Info("MongoDB indexes created successfully")
+	logger.WithRequest(ctx).Info(
+		logger.Msg("Metadata", "MongoRepository", "Adapter", "mongodb indexes created successfully"),
+	)
 	return nil
 }
 
@@ -79,7 +83,7 @@ func (r *mongoRepository) Get(ctx context.Context, url string) (*domain.Metadata
 	err := r.collection.FindOne(ctx, filter).Decode(&mongoModel)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return nil, domain.ErrNotFound
+			return nil, apperror.New(apperror.ErrNotFound, "metadata not found")
 		}
 		return nil, apperror.Wrap(apperror.ErrInternal, "internal server error", err)
 	}

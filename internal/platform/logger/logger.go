@@ -1,6 +1,8 @@
 package logger
 
 import (
+	"context"
+	"fmt"
 	"sync"
 
 	"go.uber.org/zap"
@@ -58,6 +60,10 @@ func Sync() {
 }
 
 // Helper functions for easy access
+func With(fields ...zap.Field) *zap.Logger {
+	return Get().With(fields...)
+}
+
 func Info(msg string, fields ...zap.Field) {
 	Get().Info(msg, fields...)
 }
@@ -76,4 +82,47 @@ func Warn(msg string, fields ...zap.Field) {
 
 func Fatal(msg string, fields ...zap.Field) {
 	Get().Fatal(msg, fields...)
+}
+
+type contextKey string
+
+const (
+	reqIDKey contextKey = "req_id"
+)
+
+const (
+	SeverityP0Critical = "P0-Critical"
+	SeverityP1High     = "P1-High"
+	SeverityP2Medium   = "P2-Medium"
+)
+
+func ContextWithReqID(ctx context.Context, reqID string) context.Context {
+	return context.WithValue(ctx, reqIDKey, reqID)
+}
+
+func ReqID(ctx context.Context) string {
+	if v := ctx.Value(reqIDKey); v != nil {
+		if id, ok := v.(string); ok {
+			return id
+		}
+	}
+	return ""
+}
+
+func RequestFields(ctx context.Context) []zap.Field {
+	return []zap.Field{
+		zap.String("traceId", ReqID(ctx)),
+	}
+}
+
+func WithRequest(ctx context.Context, fields ...zap.Field) *zap.Logger {
+	return Get().With(append(RequestFields(ctx), fields...)...)
+}
+
+func Msg(domain, component, layer, msg string) string {
+	return fmt.Sprintf("[%s][%s][%s]: %s", domain, component, layer, msg)
+}
+
+func Alert(severity, domain, component, layer, msg string) string {
+	return fmt.Sprintf("Alert Severity:%s, [%s][%s][%s]: %s", severity, domain, component, layer, msg)
 }

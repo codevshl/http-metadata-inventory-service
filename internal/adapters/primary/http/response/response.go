@@ -17,12 +17,7 @@ type APIResponse struct {
 	Code    string      `json:"code"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
-	Error   *ErrorBody  `json:"error,omitempty"`
 	TraceID string      `json:"trace_id,omitempty"`
-}
-
-type ErrorBody struct {
-	Kind string `json:"kind"`
 }
 
 func WriteSuccess(c *gin.Context, status int, code, message string, data interface{}) {
@@ -42,9 +37,6 @@ func WriteError(c *gin.Context, err error) {
 		Success: false,
 		Code:    toErrorCode(appErr.Kind),
 		Message: apperror.Message(err),
-		Error: &ErrorBody{
-			Kind: appErr.Kind.Name(),
-		},
 		TraceID: TraceID(c),
 	})
 }
@@ -107,6 +99,8 @@ func toErrorCode(kind apperror.ErrorKind) string {
 		return "ERR_UPSTREAM"
 	case apperror.ErrTimeout:
 		return "ERR_TIMEOUT"
+	case apperror.ErrServiceUnavailable:
+		return "ERR_SERVICE_UNAVAILABLE"
 	default:
 		return "ERR_INTERNAL"
 	}

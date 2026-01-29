@@ -86,13 +86,14 @@ func Message(err error) string {
 Predefined error kinds
 */
 var (
-	ErrValidation    = ErrorKind{"Validation", http.StatusBadRequest}
-	ErrUnauthorized  = ErrorKind{"Unauthorized", http.StatusUnauthorized}
-	ErrForbidden     = ErrorKind{"Forbidden", http.StatusForbidden}
-	ErrNotFound      = ErrorKind{"NotFound", http.StatusNotFound}
-	ErrConflict      = ErrorKind{"Conflict", http.StatusConflict}
-	ErrBusinessLogic = ErrorKind{"BusinessLogic", http.StatusUnprocessableEntity}
-	ErrInternal      = ErrorKind{"Internal", http.StatusInternalServerError}
-	ErrUpstream      = ErrorKind{"Upstream", http.StatusBadGateway}
-	ErrTimeout       = ErrorKind{"Timeout", http.StatusGatewayTimeout}
+	ErrValidation         = ErrorKind{"Validation", http.StatusBadRequest}
+	ErrUnauthorized       = ErrorKind{"Unauthorized", http.StatusUnauthorized}
+	ErrForbidden          = ErrorKind{"Forbidden", http.StatusForbidden}
+	ErrNotFound           = ErrorKind{"NotFound", http.StatusNotFound}
+	ErrConflict           = ErrorKind{"Conflict", http.StatusConflict}
+	ErrBusinessLogic      = ErrorKind{"BusinessLogic", http.StatusUnprocessableEntity}
+	ErrInternal           = ErrorKind{"Internal", http.StatusInternalServerError}
+	ErrUpstream           = ErrorKind{"Upstream", http.StatusBadGateway}
+	ErrTimeout            = ErrorKind{"Timeout", http.StatusGatewayTimeout}
+	ErrServiceUnavailable = ErrorKind{"ServiceUnavailable", http.StatusServiceUnavailable}
 )

@@ -27,17 +27,23 @@ func Connect(uri string) error {
 		clientOptions := options.Client().ApplyURI(uri)
 		client, err = mongo.Connect(ctx, clientOptions)
 		if err != nil {
-			logger.Error("Failed to create mongo client", zap.Error(err))
+			logger.WithRequest(context.Background(), zap.Error(err)).Error(
+				logger.Alert(logger.SeverityP1High, "Database", "Mongo", "Platform", "failed to create mongo client"),
+			)
 			return
 		}
 
 		// Ping the database
 		if err = client.Ping(ctx, readpref.Primary()); err != nil {
-			logger.Error("Failed to ping mongo", zap.Error(err))
+			logger.WithRequest(context.Background(), zap.Error(err)).Error(
+				logger.Alert(logger.SeverityP1High, "Database", "Mongo", "Platform", "failed to ping mongo"),
+			)
 			return
 		}
 
-		logger.Info("Successfully connected to MongoDB")
+		logger.WithRequest(context.Background()).Info(
+			logger.Msg("Database", "Mongo", "Platform", "successfully connected to MongoDB"),
+		)
 	})
 
 	return err
@@ -57,9 +63,13 @@ func Disconnect() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := client.Disconnect(ctx); err != nil {
-			logger.Error("Failed to disconnect from MongoDB", zap.Error(err))
+			logger.WithRequest(context.Background(), zap.Error(err)).Error(
+				logger.Alert(logger.SeverityP2Medium, "Database", "Mongo", "Platform", "failed to disconnect from MongoDB"),
+			)
 		} else {
-			logger.Info("Disconnected from MongoDB")
+			logger.WithRequest(context.Background()).Info(
+				logger.Msg("Database", "Mongo", "Platform", "disconnected from MongoDB"),
+			)
 		}
 	}
 }

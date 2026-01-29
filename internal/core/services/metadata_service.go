@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/apperror"
 	"github.com/codevshl/http-metadata-inventory-service/internal/core/domain"
@@ -13,7 +14,8 @@ import (
 
 // scrapeTask represents a background scraping task
 type scrapeTask struct {
-	url string
+	url     string
+	traceID string
 }
 
 type metadataService struct {
@@ -57,9 +59,10 @@ func NewMetadataService(repo ports.MetadataRepository, scraper ports.Scraper, cf
 
 	svc.startWorkers()
 
-	logger.Info("Metadata service initialized",
+	logger.WithRequest(context.Background(),
 		zap.Int("workers", cfg.WorkerPoolSize),
-		zap.Int("queue_capacity", cfg.TaskQueueSize))
+		zap.Int("queue_capacity", cfg.TaskQueueSize),
+	).Info(logger.Msg("Metadata", "Service", "Core", "service initialized"))
 
 	return svc
 }
@@ -74,18 +77,30 @@ func (s *metadataService) startWorkers() {
 
 // worker processes scraping tasks from the queue
 func (s *metadataService) worker(id int) {
-	defer s.workerPool.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithRequest(context.Background(), zap.Int("worker_id", id), zap.Any("panic", r), zap.Stack("stack")).Error(
+				logger.Alert(logger.SeverityP0Critical, "Metadata", "Worker", "Core", "panic recovered in worker"))
+		}
+		s.workerPool.Done()
+	}()
 
-	logger.Debug("Worker started", zap.Int("worker_id", id))
+	logger.WithRequest(context.Background(), zap.Int("worker_id", id)).Debug(
+		logger.Msg("Metadata", "Worker", "Core", "worker started"),
+	)
 
 	for {
 		select {
 		case <-s.ctx.Done():
-			logger.Debug("Worker shutting down", zap.Int("worker_id", id))
+			logger.WithRequest(context.Background(), zap.Int("worker_id", id)).Debug(
+				logger.Msg("Metadata", "Worker", "Core", "worker shutting down"),
+			)
 			return
 		case task, ok := <-s.taskQueue:
 			if !ok {
-				logger.Debug("Task queue closed, worker exiting", zap.Int("worker_id", id))
+				logger.WithRequest(context.Background(), zap.Int("worker_id", id)).Debug(
+					logger.Msg("Metadata", "Worker", "Core", "task queue closed, worker exiting"),
+				)
 				return
 			}
 
@@ -96,42 +111,46 @@ func (s *metadataService) worker(id int) {
 
 // processTask handles the actual scraping and saving
 func (s *metadataService) processTask(task scrapeTask, workerID int) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*1000000000)
+	baseCtx := context.Background()
+	if task.traceID != "" {
+		baseCtx = logger.ContextWithReqID(baseCtx, task.traceID)
+	}
+	ctx, cancel := context.WithTimeout(baseCtx, 60*time.Second)
 	defer cancel()
 
-	logger.Info("Processing scrape task",
-		zap.Int("worker_id", workerID),
-		zap.String("url", task.url))
+	logger.WithRequest(ctx, zap.Int("worker_id", workerID), zap.String("url", task.url)).Info(
+		logger.Msg("Metadata", "Worker", "Core", "processing scrape task"),
+	)
 
 	metadata, err := s.scraper.Fetch(ctx, task.url)
 	if err != nil {
-		logger.Error("Failed to scrape URL",
-			zap.Int("worker_id", workerID),
-			zap.String("url", task.url),
-			zap.Error(err))
+		logger.WithRequest(ctx, zap.Int("worker_id", workerID), zap.String("url", task.url), zap.Error(err)).Error(
+			logger.Alert(logger.SeverityP1High, "Metadata", "Worker", "Core", "failed to scrape url"),
+		)
 		return
 	}
 
 	if err := s.repo.Save(ctx, *metadata); err != nil {
-		logger.Error("Failed to save metadata",
-			zap.Int("worker_id", workerID),
-			zap.String("url", task.url),
-			zap.Error(err))
+		logger.WithRequest(ctx, zap.Int("worker_id", workerID), zap.String("url", task.url), zap.Error(err)).Error(
+			logger.Alert(logger.SeverityP1High, "Metadata", "Worker", "Core", "failed to save metadata"),
+		)
 		return
 	}
 
-	logger.Info("Successfully processed scrape task",
-		zap.Int("worker_id", workerID),
-		zap.String("url", task.url))
+	logger.WithRequest(ctx, zap.Int("worker_id", workerID), zap.String("url", task.url)).Info(
+		logger.Msg("Metadata", "Worker", "Core", "successfully processed scrape task"),
+	)
 }
 
 // CreateMetadata synchronously scrapes and saves metadata for a URL
 func (s *metadataService) CreateMetadata(ctx context.Context, url string) error {
 	if url == "" {
-		return domain.ErrInvalidURL
+		return apperror.New(apperror.ErrValidation, "url is required")
 	}
 
-	logger.Info("Creating metadata", zap.String("url", url))
+	logger.WithRequest(ctx, zap.String("url", url)).Info(
+		logger.Msg("Metadata", "Service", "Core", "creating metadata"),
+	)
 
 	metadata, err := s.scraper.Fetch(ctx, url)
 	if err != nil {
@@ -142,34 +161,45 @@ func (s *metadataService) CreateMetadata(ctx context.Context, url string) error 
 		return apperror.Wrap(apperror.ErrInternal, "internal server error", err)
 	}
 
-	logger.Info("Metadata created successfully", zap.String("url", url))
+	logger.WithRequest(ctx, zap.String("url", url)).Info(
+		logger.Msg("Metadata", "Service", "Core", "metadata created successfully"),
+	)
 	return nil
 }
 
 // GetMetadata retrieves metadata for a URL, triggering background scraping if not found
 func (s *metadataService) GetMetadata(ctx context.Context, url string) (*domain.Metadata, error) {
 	if url == "" {
-		return nil, domain.ErrInvalidURL
+		return nil, apperror.New(apperror.ErrValidation, "url is required")
 	}
 
-	logger.Info("Getting metadata", zap.String("url", url))
+	logger.WithRequest(ctx, zap.String("url", url)).Info(
+		logger.Msg("Metadata", "Service", "Core", "getting metadata"),
+	)
 
 	metadata, err := s.repo.Get(ctx, url)
 	if err == nil {
-		logger.Info("Metadata found in database", zap.String("url", url))
+		logger.WithRequest(ctx, zap.String("url", url)).Info(
+			logger.Msg("Metadata", "Service", "Core", "metadata found in database"),
+		)
 		return metadata, nil
 	}
 
 	if apperror.Is(err, apperror.ErrNotFound) {
-		logger.Info("Metadata not found, queueing background scrape", zap.String("url", url))
+		logger.WithRequest(ctx, zap.String("url", url)).Info(
+			logger.Msg("Metadata", "Service", "Core", "metadata not found, queueing background scrape"),
+		)
 
 		select {
-		case s.taskQueue <- scrapeTask{url: url}:
-			logger.Debug("Task queued successfully", zap.String("url", url))
+		case s.taskQueue <- scrapeTask{url: url, traceID: logger.ReqID(ctx)}:
+			logger.WithRequest(ctx, zap.String("url", url)).Debug(
+				logger.Msg("Metadata", "Service", "Core", "task queued successfully"),
+			)
 		default:
-			logger.Warn("Task queue is full, scrape may be delayed",
-				zap.String("url", url),
-				zap.Int("queue_capacity", s.queueCapacity))
+			logger.WithRequest(ctx, zap.String("url", url), zap.Int("queue_capacity", s.queueCapacity)).Warn(
+				logger.Alert(logger.SeverityP2Medium, "Metadata", "Service", "Core", "task queue is full, rejecting request"),
+			)
+			return nil, apperror.New(apperror.ErrServiceUnavailable, "server busy, please retry later")
 		}
 
 		return nil, nil
@@ -180,7 +210,9 @@ func (s *metadataService) GetMetadata(ctx context.Context, url string) (*domain.
 
 // Shutdown gracefully stops the worker pool
 func (s *metadataService) Shutdown() {
-	logger.Info("Shutting down metadata service")
+	logger.WithRequest(context.Background()).Info(
+		logger.Msg("Metadata", "Service", "Core", "shutting down metadata service"),
+	)
 
 	s.cancel()
 
@@ -188,5 +220,7 @@ func (s *metadataService) Shutdown() {
 
 	s.workerPool.Wait()
 
-	logger.Info("Metadata service shutdown complete")
+	logger.WithRequest(context.Background()).Info(
+		logger.Msg("Metadata", "Service", "Core", "metadata service shutdown complete"),
+	)
 }
