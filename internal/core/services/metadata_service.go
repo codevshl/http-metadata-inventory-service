@@ -59,6 +59,9 @@ func NewMetadataService(repo ports.MetadataRepository, scraper ports.Scraper, cf
 
 	svc.startWorkers()
 
+	// TODO: using a channel here is fine for a single instance, but if we need
+	// to scale this up to multiple pods, we should swap this out for a real
+	// message queue like RabbitMQ or Redis so workers can run anywhere.
 	logger.WithRequest(context.Background(),
 		zap.Int("workers", cfg.WorkerPoolSize),
 		zap.Int("queue_capacity", cfg.TaskQueueSize),
@@ -191,11 +194,10 @@ func (s *metadataService) GetMetadata(ctx context.Context, url string) (*domain.
 		)
 
 		select {
-		case s.taskQueue <- scrapeTask{url: url, traceID: logger.ReqID(ctx)}:
-			logger.WithRequest(ctx, zap.String("url", url)).Debug(
-				logger.Msg("Metadata", "Service", "Core", "task queued successfully"),
-			)
 		default:
+			// TODO: currently we just drop the request if the queue is full, which isn't great.
+			// we should probably persist this to a DB or use a Dead Letter Queue (DLQ)
+			// so we can retry these later instead of just failing.
 			logger.WithRequest(ctx, zap.String("url", url), zap.Int("queue_capacity", s.queueCapacity)).Warn(
 				logger.Alert(logger.SeverityP2Medium, "Metadata", "Service", "Core", "task queue is full, rejecting request"),
 			)

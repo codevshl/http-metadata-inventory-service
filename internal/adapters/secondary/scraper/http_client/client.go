@@ -39,6 +39,9 @@ func (s *scraper) Fetch(ctx context.Context, url string) (*domain.Metadata, erro
 
 	req.Header.Set("User-Agent", "MetadataInventoryBot/1.0")
 
+	// TODO: right now we only try once. in the future, we should probably add some retries
+	// here (like exponential backoff) just in case the site is flaky or temporarily down.
+	// maybe use something like `hashicorp/go-retryablehttp`.
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.ErrUpstream, "failed to fetch metadata", err)

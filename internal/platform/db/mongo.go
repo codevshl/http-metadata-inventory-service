@@ -25,6 +25,9 @@ func Connect(uri string) error {
 		defer cancel()
 
 		clientOptions := options.Client().ApplyURI(uri)
+		// TODO: we're using default connection pool settings here. for high load,
+		// we should probably tweak MaxPoolSize and MaxConnIdleTime to avoid
+		// keeping too many connections open or running out of them.
 		client, err = mongo.Connect(ctx, clientOptions)
 		if err != nil {
 			logger.WithRequest(context.Background(), zap.Error(err)).Error(

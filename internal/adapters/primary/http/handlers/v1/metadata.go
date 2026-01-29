@@ -32,7 +32,12 @@ func NewMetadataHandler(svc ports.MetadataService) *MetadataHandler {
 // @Failure 500 {object} response.APIResponse "success=false"
 // @Failure 502 {object} response.APIResponse "success=false"
 // @Router /metadata [post]
+// @Failure 500 {object} response.APIResponse "success=false"
+// @Failure 502 {object} response.APIResponse "success=false"
+// @Router /metadata [post]
 func (h *MetadataHandler) CreateMetadataHandler(c *gin.Context) {
+	// TODO: naive validation here. we should probably use a stronger URL validator
+	// to block private IPs (SSRF protection) and weird schemes before processing.
 	var req CreateMetadataRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.WithRequest(c.Request.Context(), zap.Error(err)).Warn(

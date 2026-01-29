@@ -24,6 +24,10 @@ func SetupRouter(svc ports.MetadataService, isProd bool) *gin.Engine {
 	r.Use(middleware.RequestLogger())
 	r.Use(middleware.RecoveryMiddleware())
 	r.Use(middleware.JSONMiddleware())
+
+	// TODO: we definitely need to add some auth here later (JWTs or API keys)
+	// so we don't leave the API wide open. this would also let us do rate
+	// limiting per user which is super important for production.
 	r.Use(middleware.ErrorHandlerMiddleware())
 
 	// Handlers
