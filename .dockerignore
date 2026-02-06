@@ -1,0 +1,10 @@
+.git
+.env
+*.log
+*.md
+!README.md
+mocks/
+scripts/
+.gemini/
+main
+server

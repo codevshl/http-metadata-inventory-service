@@ -1,0 +1,23 @@
+# Go build/test artifacts
+/bin/
+/pkg/
+*.test
+/main
+/server
+
+# Dependency vendoring
+/vendor/
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Coverage output
+/coverage.out
+
+# OS/editor cruft
+.DS_Store
+
+# Local tooling
+/.agent/
