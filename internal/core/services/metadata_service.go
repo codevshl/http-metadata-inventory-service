@@ -194,6 +194,13 @@ func (s *metadataService) GetMetadata(ctx context.Context, url string) (*domain.
 		)
 
 		select {
+		case s.taskQueue <- scrapeTask{
+			url:     url,
+			traceID: logger.ReqID(ctx),
+		}:
+			logger.WithRequest(ctx, zap.String("url", url)).Info(
+				logger.Msg("Metadata", "Service", "Core", "background scrape enqueued"),
+			)
 		default:
 			// TODO: currently we just drop the request if the queue is full, which isn't great.
 			// we should probably persist this to a DB or use a Dead Letter Queue (DLQ)
